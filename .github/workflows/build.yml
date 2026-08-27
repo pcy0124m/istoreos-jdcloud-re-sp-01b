@@ -221,9 +221,11 @@ jobs:
           cd $OPENWRTROOT
           echo "================== 开始编译 =================="
           # 先用并行编译，失败时用 -j1 V=sc 重试以定位问题
-          make -j$(nproc) V=s 2>&1 | tail -300
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "================== 并行编译失败，使用 -j1 重试获取详细日志 =================="
+          set -o pipefail
+          make -j$(nproc) V=s 2>&1 | tee /tmp/build.log | tail -300
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo "================== 并行编译失败 (exit=$BUILD_EXIT)，使用 -j1 重试获取详细日志 =================="
             make -j1 V=sc 2>&1 | tail -500
           fi
           echo "================== 检查编译产物 =================="
