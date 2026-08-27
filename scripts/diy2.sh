@@ -8,31 +8,29 @@ set -e
 
 # ------------------------------------------------------------
 # 关键修复：物理删除 iStoreOS 中已知有问题的包
-# 这些包即使在 .config 里设为 =n，也会被其他包硬依赖拉入
-# 导致编译失败（wsdd2 下载失败、diffutils 依赖缺失等）
+# 这些包即使在 .config 里设为 =n，也会被默认包/依赖拉入。
+# 注意必须同时删除两处：
+#   1) feeds/ 下的源目录（包定义）
+#   2) package/feeds/ 下的符号链接（feeds install 生成，
+#      构建系统实际扫描的是这里，只删源目录是无效的！）
+# 本步骤在"生成 .config"之前执行，删除后 defconfig 无法再选中它们
 # ------------------------------------------------------------
 echo "================== 移除已知问题包 =================="
 REMOVED_COUNT=0
-for pkg_dir in \
-  feeds/packages/net/wsdd2 \
-  feeds/packages/net/samba4 \
-  feeds/packages/devel/diffutils \
-  feeds/packages/lang/zabbix \
-  feeds/packages/lang/zsh \
-  feeds/packages/devel/baresip-mod-avcodec \
-  feeds/packages/devel/baresip-mod-avformat \
-  feeds/packages/devel/baresip-mod-avdec \
-  feeds/packages/luci/luci-app-samba4 \
-  feeds/packages/luci/luci-app-wireguard \
-  feeds/packages/utils/prometheus-node-exporter-ucode-wireguard
-do
-  if [ -d "$pkg_dir" ]; then
-    echo "  移除: $pkg_dir"
-    rm -rf "$pkg_dir"
+for pkg in wsdd2 samba4 diffutils luci-app-samba4; do
+  # 删除 feeds 源目录（任意深度）
+  while IFS= read -r d; do
+    echo "  移除源目录: $d"
+    rm -rf "$d"
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
-  fi
+  done < <(find feeds -type d -name "$pkg" 2>/dev/null || true)
+  # 删除 package/feeds 下的符号链接/副本
+  while IFS= read -r d; do
+    echo "  移除包链接: $d"
+    rm -rf "$d"
+  done < <(find package/feeds -name "$pkg" 2>/dev/null || true)
 done
-echo "共移除 $REMOVED_COUNT 个问题包"
+echo "共移除 $REMOVED_COUNT 个问题包源目录"
 
 # ------------------------------------------------------------
 # 合并自定义 files/ 到 rootfs
