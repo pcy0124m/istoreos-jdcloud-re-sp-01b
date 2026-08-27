@@ -1,0 +1,277 @@
+# ============================================================
+# iStoreOS 云编译工作流 - 京东云 RE-SP-01B（MT7621）
+# 源码仓库：https://github.com/istoreos/istoreos
+# ============================================================
+name: iStoreOS 云编译 - 京东云 RE-SP-01B
+
+on:
+  repository_dispatch:
+  # 手动触发：可选择分支并控制是否清理缓存
+  workflow_dispatch:
+    inputs:
+      repo_branch:
+        description: 'iStoreOS 源码分支/标签（如 master、v22.03.6）'
+        required: false
+        default: 'master'
+        type: string
+      clean_cache:
+        description: '强制清理缓存重新编译'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+  # 定时编译：每周六北京时间 02:00
+  schedule:
+    - cron: '0 18 * * 5'
+
+# 全局环境变量（可在 workflow_dispatch 输入中覆盖分支）
+env:
+  REPO_URL: https://github.com/istoreos/istoreos
+  REPO_BRANCH: master
+  CONFIG_FILE: config/jdcloud-re-sp-01b.config
+  DEVICE_NAME: jdcloud_re-sp-01b
+  FIRMWARE_DIR: /opt/firmware
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    name: 编译 iStoreOS 固件
+    runs-on: ubuntu-22.04
+
+    steps:
+      # ----------------------------------------------------------
+      # 1. 检出本仓库（包含配置与脚本）
+      # ----------------------------------------------------------
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 处理手动触发参数
+        run: |
+          if [ -n "${{ inputs.repo_branch }}" ]; then
+            echo "REPO_BRANCH=${{ inputs.repo_branch }}" >> $GITHUB_ENV
+            echo "本次使用分支/标签：${{ inputs.repo_branch }}"
+          else
+            echo "本次使用默认分支：$REPO_BRANCH"
+          fi
+          if [ "${{ inputs.clean_cache }}" = "true" ]; then
+            echo "CLEAN_CACHE=true" >> $GITHUB_ENV
+          else
+            echo "CLEAN_CACHE=false" >> $GITHUB_ENV
+          fi
+
+      # ----------------------------------------------------------
+      # 2. 释放磁盘空间（GitHub Runner 默认仅 ~14GB 可用，需清理）
+      # ----------------------------------------------------------
+      - name: 释放磁盘空间
+        run: |
+          echo "================== 清理 Runner 磁盘空间 =================="
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/lib/jvm /opt/hostedtoolcache
+          sudo apt-get clean
+          df -h /
+
+      # ----------------------------------------------------------
+      # 3. 安装编译依赖
+      # ----------------------------------------------------------
+      - name: 初始化编译环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          echo "================== 安装依赖包 =================="
+          sudo -E apt-get update -y
+          sudo -E apt-get install -y \
+              build-essential clang flex bison g++ gawk \
+              gcc-multilib g++-multilib gettext git libncurses5-dev \
+              libssl-dev python3 python3-distutils python3-pyelftools \
+              rsync unzip zlib1g-dev swig time
+          # 清理无关组件避免冲突
+          sudo -E apt-get purge -y azure-cli gh html5lib || true
+          sudo -E apt-get autoremove --purge -y || true
+          sudo timedatectl set-timezone "$TZ"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          df -h /
+
+      # ----------------------------------------------------------
+      # 4. 克隆 iStoreOS 源码
+      # ----------------------------------------------------------
+      - name: 克隆 iStoreOS 源码
+        run: |
+          echo "================== 克隆源码：$REPO_URL ($REPO_BRANCH) =================="
+          git clone --depth 1 --single-branch --branch "$REPO_BRANCH" "$REPO_URL" openwrt
+          cd openwrt
+          git log -1 --format='当前提交：%h %s（%cd）'
+          echo "OPENWRTROOT=$GITHUB_WORKSPACE/openwrt" >> $GITHUB_ENV
+
+      # ----------------------------------------------------------
+      # 5. 缓存 dl/ 与 ccache（加速二次编译）
+      # ----------------------------------------------------------
+      - name: 缓存源码包与编译产物
+        if: env.CLEAN_CACHE != 'true'
+        uses: actions/cache@v3
+        with:
+          path: |
+            openwrt/dl
+            openwrt/.ccache
+          key: ${{ runner.os }}-istoreos-${{ env.REPO_BRANCH }}-${{ hashFiles('config/jdcloud-re-sp-01b.config') }}
+          restore-keys: |
+            ${{ runner.os }}-istoreos-${{ env.REPO_BRANCH }}-
+
+      - name: 清空缓存（强制全量编译）
+        if: env.CLEAN_CACHE == 'true'
+        run: |
+          echo "用户选择了清理缓存，将进行全量编译"
+          rm -rf openwrt/dl openwrt/.ccache || true
+
+      # ----------------------------------------------------------
+      # 6. DIY 脚本一：feeds 安装前执行（添加自定义源等）
+      # ----------------------------------------------------------
+      - name: DIY1（feeds 安装前自定义）
+        run: |
+          cd $OPENWRTROOT
+          chmod +x $GITHUB_WORKSPACE/scripts/diy1.sh
+          bash $GITHUB_WORKSPACE/scripts/diy1.sh
+
+      # ----------------------------------------------------------
+      # 7. 更新并安装 feeds
+      # ----------------------------------------------------------
+      - name: 更新并安装 feeds
+        run: |
+          cd $OPENWRTROOT
+          echo "================== 更新 feeds =================="
+          ./scripts/feeds update -a
+          echo "================== 安装 feeds =================="
+          ./scripts/feeds install -a
+
+      # ----------------------------------------------------------
+      # 8. DIY 脚本二：feeds 安装后执行（修改包定义、替换默认配置等）
+      # ----------------------------------------------------------
+      - name: DIY2（feeds 安装后自定义）
+        run: |
+          cd $OPENWRTROOT
+          chmod +x $GITHUB_WORKSPACE/scripts/diy2.sh
+          bash $GITHUB_WORKSPACE/scripts/diy2.sh
+
+      # ----------------------------------------------------------
+      # 9. 验证设备支持（在日志中输出设备定义，便于排查）
+      # ----------------------------------------------------------
+      - name: 验证设备支持
+        run: |
+          cd $OPENWRTROOT
+          echo "================== 检查 JDCloud 设备支持 =================="
+          echo "--- target/linux/ramips/mt7621/ ---"
+          grep -ri "jdcloud" target/linux/ramips/mt7621/ 2>/dev/null || echo "（未在 mt7621 目录找到 jdcloud 关键字，请核对设备名）"
+          echo "--- image makefile ---"
+          grep -i "jdcloud" target/linux/ramips/image/mt7621.mk 2>/dev/null || echo "（未在 mt7621.mk 找到 jdcloud 设备，可能名称不同）"
+          echo "--- dts 文件 ---"
+          ls target/linux/ramips/dts/ | grep -i "jdcloud" || echo "（无 jdcloud 相关 dts）"
+
+      # ----------------------------------------------------------
+      # 10. 生成 .config
+      # ----------------------------------------------------------
+      - name: 生成 .config
+        run: |
+          cd $OPENWRTROOT
+          rm -f .config
+          cat "$GITHUB_WORKSPACE/$CONFIG_FILE" > .config
+          make defconfig
+          echo "================== 关键配置项（节选） =================="
+          grep -E '^(CONFIG_TARGET_ramips|CONFIG_PACKAGE_istore|CONFIG_PACKAGE_quickstart|CONFIG_PACKAGE_luci-app-istore)' .config | head -40
+
+      # ----------------------------------------------------------
+      # 11. 下载源码包
+      # ----------------------------------------------------------
+      - name: 下载源码包
+        run: |
+          cd $OPENWRTROOT
+          echo "================== 开始下载 =================="
+          make download -j$(nproc) 2>&1 | tail -30
+          # 检查下载结果
+          if find dl -type f | head -1 | grep -q .; then
+            echo "下载完成，已下载文件数：$(find dl -type f | wc -l)"
+          else
+            echo "下载可能失败，请检查日志"
+          fi
+
+      # ----------------------------------------------------------
+      # 12. 编译固件
+      # ----------------------------------------------------------
+      - name: 编译固件
+        run: |
+          cd $OPENWRTROOT
+          echo "================== 开始编译 =================="
+          # 首次失败时尝试重试一次（OpenWrt 偶发性下载/编译失败）
+          make -j$(nproc) V=s 2>&1 | tail -300
+          echo "================== 检查编译产物 =================="
+          if find bin/targets/ -name "*.bin" 2>/dev/null | head -1 | grep -q .; then
+            echo "编译成功！"
+          else
+            echo "未找到固件产物，编译可能失败，请查看上方日志"
+            exit 1
+          fi
+
+      # ----------------------------------------------------------
+      # 13. 整理固件并生成说明文件
+      # ----------------------------------------------------------
+      - name: 整理固件
+        run: |
+          cd $OPENWRTROOT
+          mkdir -p "$FIRMWARE_DIR"
+          echo "================== 固件列表 =================="
+          find bin/targets/ -type f \( \
+              -name "*.bin" -o -name "*.img" -o -name "*.manifest" -o -name "*.json" \
+            \) -print -exec cp -v {} "$FIRMWARE_DIR/" \;
+          # 生成说明文件
+          cat > "$FIRMWARE_DIR/README.txt" <<EOF
+          iStoreOS 云编译固件
+          设备：京东云 RE-SP-01B（MT7621）
+          源码分支：$REPO_BRANCH
+          编译时间：$(date '+%Y-%m-%d %H:%M:%S %Z')
+          构建编号：#${{ github.run_number }}
+          源码提交：$(git log -1 --format='%h %s')
+          EOF
+          ls -lh "$FIRMWARE_DIR/"
+
+      # ----------------------------------------------------------
+      # 14. 上传固件到 Artifacts（保留 14 天）
+      # ----------------------------------------------------------
+      - name: 上传固件（Artifact）
+        uses: actions/upload-artifact@v4
+        with:
+          name: iStoreOS_${{ env.DEVICE_NAME }}_${{ github.run_number }}
+          path: ${{ env.FIRMWARE_DIR }}/*
+          retention-days: 14
+          compression-level: 0
+
+      # ----------------------------------------------------------
+      # 15. 发布到 Release（仅手动触发时）
+      # ----------------------------------------------------------
+      - name: 发布到 GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: iStoreOS-${{ env.DEVICE_NAME }}-${{ github.run_number }}
+          tag_name: ${{ env.DEVICE_NAME }}-${{ github.run_number }}
+          files: ${{ env.FIRMWARE_DIR }}/*
+          body: |
+            ## iStoreOS 云编译固件
+
+            - 设备：京东云 RE-SP-01B（MT7621）
+            - 源码分支：${{ env.REPO_BRANCH }}
+            - 构建编号：#${{ github.run_number }}
+            - 触发方式：${{ github.event_name }}
+
+            > 请确认设备型号后刷入，刷机有风险，请先备份原厂固件。
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----------------------------------------------------------
+      # 16. 清理工作区释放空间
+      # ----------------------------------------------------------
+      - name: 清理工作区
+        if: always()
+        run: |
+          sudo rm -rf openwrt/ $FIRMWARE_DIR || true
+          df -h /
