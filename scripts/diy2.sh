@@ -7,17 +7,35 @@
 set -e
 
 # ------------------------------------------------------------
-# 示例 1：调整 LuCI 主题默认顺序（iStoreOS 主题优先）
+# 关键修复：物理删除 iStoreOS 中已知有问题的包
+# 这些包即使在 .config 里设为 =n，也会被其他包硬依赖拉入
+# 导致编译失败（wsdd2 下载失败、diffutils 依赖缺失等）
 # ------------------------------------------------------------
-# 在 luci-mod-admin-full 的 root 索引页面定制中可改默认主题，
-# 若源码结构变化，请在此处自行适配。
+echo "================== 移除已知问题包 =================="
+REMOVED_COUNT=0
+for pkg_dir in \
+  feeds/packages/net/wsdd2 \
+  feeds/packages/net/samba4 \
+  feeds/packages/devel/diffutils \
+  feeds/packages/lang/zabbix \
+  feeds/packages/lang/zsh \
+  feeds/packages/devel/baresip-mod-avcodec \
+  feeds/packages/devel/baresip-mod-avformat \
+  feeds/packages/devel/baresip-mod-avdec \
+  feeds/packages/luci/luci-app-samba4 \
+  feeds/packages/luci/luci-app-wireguard \
+  feeds/packages/utils/prometheus-node-exporter-ucode-wireguard
+do
+  if [ -d "$pkg_dir" ]; then
+    echo "  移除: $pkg_dir"
+    rm -rf "$pkg_dir"
+    REMOVED_COUNT=$((REMOVED_COUNT + 1))
+  fi
+done
+echo "共移除 $REMOVED_COUNT 个问题包"
 
 # ------------------------------------------------------------
-# 示例 2：从自定义路径合并文件到 rootfs
-# ------------------------------------------------------------
-# 在仓库根目录新建 files/ 目录，其中文件会按路径合并进固件：
-#   files/etc/uci-defaults/99-custom  ->  首次启动执行脚本
-#   files/etc/config/network          ->  覆盖默认网络配置
+# 合并自定义 files/ 到 rootfs
 # ------------------------------------------------------------
 if [ -d "$GITHUB_WORKSPACE/files" ]; then
   echo "================== 合并自定义 files/ =================="
@@ -25,61 +43,49 @@ if [ -d "$GITHUB_WORKSPACE/files" ]; then
 fi
 
 # ------------------------------------------------------------
-# 路由器自定义：LAN IP 和 root 密码
-# 由 workflow_dispatch 输入 ROUTER_IP / ROUTER_PASSWORD 传入
-# 生成 uci-defaults 脚本，固件首次启动时执行一次
-# 值用 base64 编码后嵌入脚本，避免特殊字符破坏 shell 语法
+# 路由器 IP/密码首次启动设置
 # ------------------------------------------------------------
 if [ -n "$ROUTER_IP" ] || [ -n "$ROUTER_PASSWORD" ]; then
-  echo "================== 生成路由器自定义配置（uci-defaults） =================="
-  # base64 编码（-w0 不换行；字符集仅 [A-Za-z0-9+/=]，对 sed 安全）
-  IP_B64=$(printf '%s' "$ROUTER_IP" | base64 -w0 2>/dev/null || printf '%s' "$ROUTER_IP" | base64 | tr -d '\n')
-  PW_B64=$(printf '%s' "$ROUTER_PASSWORD" | base64 -w0 2>/dev/null || printf '%s' "$ROUTER_PASSWORD" | base64 | tr -d '\n')
-  UCI_DIR="package/base-files/files/etc/uci-defaults"
-  mkdir -p "$UCI_DIR"
-  cat > "$UCI_DIR/99-router-custom.sh" <<'UCISCRIPT'
-#!/bin/sh
-# 由 iStoreOS 云编译自动生成
-# 在固件首次启动时执行一次，配置 LAN IP 和 root 密码
+  echo "================== 写入路由器自定义配置 =================="
+  mkdir -p package/base-files/files/etc/uci-defaults
+  cat > package/base-files/files/etc/uci-defaults/99-router-custom.sh << 'CUSTOM_EOF'
+#!/bin/bash
+# 首次启动时设置路由器 IP 和密码，之后自删除
+ROUTER_IP_RAW="__ROUTER_IP__"
+ROUTER_PASSWORD_B64="__ROUTER_PASSWORD_B64__"
 
-ROUTER_IP=$(echo "IP_PLACEHOLDER" | base64 -d 2>/dev/null)
-ROUTER_PASSWORD=$(echo "PW_PLACEHOLDER" | base64 -d 2>/dev/null)
-
-if [ -n "$ROUTER_IP" ]; then
-  uci set network.lan.ipaddr="$ROUTER_IP"
-  uci set network.lan.netmask='255.255.255.0'
+if [ -n "$ROUTER_IP_RAW" ]; then
+  uci set network.lan.ipaddr="$ROUTER_IP_RAW"
+  # 同步 DHCP 地址池
+  base_ip=$(echo "$ROUTER_IP_RAW" | cut -d. -f1-3)
+  uci set network.lan.dhcp.limit=150
+  uci set network.lan.dhcp.start=100
   uci commit network
-  # DHCP 地址池 start/limit 用末段相对值，会随 LAN 网段自动适配
-  uci set dhcp.lan.start='100'
-  uci set dhcp.lan.limit='150'
-  uci commit dhcp
-  echo "[router-custom] LAN IP 已设置为 $ROUTER_IP，DHCP 池：*.100-*.249"
+  echo "已设置 LAN IP: $ROUTER_IP_RAW"
 fi
 
-if [ -n "$ROUTER_PASSWORD" ]; then
-  printf '%s\n%s\n' "$ROUTER_PASSWORD" "$ROUTER_PASSWORD" | passwd root 2>/dev/null \
-    && echo "[router-custom] root 密码已设置" \
-    || echo "[router-custom] root 密码设置失败，请手动 passwd"
+if [ -n "$ROUTER_PASSWORD_B64" ]; then
+  ROUTER_PASSWORD=$(echo "$ROUTER_PASSWORD_B64" | base64 -d 2>/dev/null)
+  if [ -n "$ROUTER_PASSWORD" ]; then
+    echo "root:$ROUTER_PASSWORD" | chpasswd
+    echo "已设置 root 密码"
+  fi
 fi
 
-exit 0
-UCISCRIPT
-  chmod +x "$UCI_DIR/99-router-custom.sh"
-  # 替换占位符（用 | 作 sed 分隔符避免 base64 中 / 冲突）
-  sed -i "s|IP_PLACEHOLDER|$IP_B64|g" "$UCI_DIR/99-router-custom.sh"
-  sed -i "s|PW_PLACEHOLDER|$PW_B64|g" "$UCI_DIR/99-router-custom.sh"
-  echo "  -> LAN IP: ${ROUTER_IP:-默认（192.168.1.1）}"
-  if [ -n "$ROUTER_PASSWORD" ]; then echo "  -> root 密码: 已嵌入脚本（base64 编码）"; fi
+# 自删除
+rm -f /etc/uci-defaults/99-router-custom.sh
+CUSTOM_EOF
+
+  # 替换占位符
+  sed -i "s|__ROUTER_IP__|${ROUTER_IP:-}|g" package/base-files/files/etc/uci-defaults/99-router-custom.sh
+  if [ -n "$ROUTER_PASSWORD" ]; then
+    PASSWORD_B64=$(echo -n "$ROUTER_PASSWORD" | base64)
+    sed -i "s|__ROUTER_PASSWORD_B64__|${PASSWORD_B64}|g" package/base-files/files/etc/uci-defaults/99-router-custom.sh
+  else
+    sed -i "s|__ROUTER_PASSWORD_B64__||g" package/base-files/files/etc/uci-defaults/99-router-custom.sh
+  fi
+  chmod +x package/base-files/files/etc/uci-defaults/99-router-custom.sh
+  echo "路由器自定义配置已写入"
 fi
-
-# ------------------------------------------------------------
-# 示例 3：调整内核选项（如开启 BBR、开启某些网络功能）
-# ------------------------------------------------------------
-# sed -i 's/.*CONFIG_BBR.*/CONFIG_BBR=y/' target/linux/generic/config-*
-
-# ------------------------------------------------------------
-# 示例 4：调整默认 SSID
-# ------------------------------------------------------------
-# sed -i 's/OpenWrt/iStoreOS/' package/network/config/wifi-scripts/files/lib/wifi/mac80211.sh
 
 echo "================== DIY2 完成 =================="
