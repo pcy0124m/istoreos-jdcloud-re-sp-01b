@@ -1,0 +1,4 @@
+# 统一行尾：CI(Linux) 上 git apply / bash 需要 LF
+* text=auto
+*.patch text eol=lf
+*.sh text eol=lf
