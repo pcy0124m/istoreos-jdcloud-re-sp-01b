@@ -20,6 +20,16 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      router_ip:
+        description: '路由器 LAN IP（如 192.168.100.1；留空则保持默认 192.168.1.1）'
+        required: false
+        default: ''
+        type: string
+      router_password:
+        description: 'root 登录密码（留空则保持默认无密码；固件首次启动自动设置）'
+        required: false
+        default: ''
+        type: string
   # 定时编译：每周六北京时间 02:00
   schedule:
     - cron: '0 18 * * 5'
@@ -58,6 +68,16 @@ jobs:
           else
             echo "CLEAN_CACHE=false" >> $GITHUB_ENV
           fi
+          # 路由器自定义：LAN IP 和 root 密码
+          ROUTER_IP_INPUT="${{ inputs.router_ip }}"
+          ROUTER_PW_INPUT="${{ inputs.router_password }}"
+          if [ -n "$ROUTER_PW_INPUT" ]; then
+            echo "::add-mask::$ROUTER_PW_INPUT"
+          fi
+          echo "ROUTER_IP=$ROUTER_IP_INPUT" >> $GITHUB_ENV
+          echo "ROUTER_PASSWORD=$ROUTER_PW_INPUT" >> $GITHUB_ENV
+          if [ -n "$ROUTER_IP_INPUT" ]; then echo "自定义 LAN IP: $ROUTER_IP_INPUT"; fi
+          if [ -n "$ROUTER_PW_INPUT" ]; then echo "自定义 root 密码: 已设置（日志中隐藏）"; fi
 
       # ----------------------------------------------------------
       # 2. 释放磁盘空间（GitHub Runner 默认仅 ~14GB 可用，需清理）
