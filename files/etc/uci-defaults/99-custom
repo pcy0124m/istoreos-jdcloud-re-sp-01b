@@ -1,0 +1,51 @@
+#!/bin/sh
+# ============================================================
+# uci-defaults/99-custom：首次开机执行（执行完自动删除）
+# 目的：强制网络/密码/DHCP，避免出现"灯闪但无IP"的假死
+# 注意：u-boot-env/overlay 第一次启动时会执行 /etc/uci-defaults/*
+#       执行后文件会被移动到 /etc/uci-defaults/.*-done，不会重复执行
+# ============================================================
+set -e
+
+# ========== LAN：强制 192.168.1.1 + DHCP 服务器开 ==========
+uci -q batch <<'EOF'
+delete network.lan
+set network.lan=interface
+set network.lan.device='br-lan'
+set network.lan.proto='static'
+set network.lan.ipaddr='192.168.1.1'
+set network.lan.netmask='255.255.255.0'
+set network.lan.delegate='0'
+commit network
+
+delete dhcp.lan
+set dhcp.lan=dhcp
+set dhcp.lan.interface='lan'
+set dhcp.lan.start='100'
+set dhcp.lan.limit='100'
+set dhcp.lan.leasetime='12h'
+set dhcp.lan.dhcpv4='server'
+set dhcp.lan.force='1'
+commit dhcp
+EOF
+
+# ========== WAN：默认 DHCP 客户端 ==========
+uci -q batch <<'EOF'
+delete network.wan
+set network.wan=interface
+set network.wan.device='wan'
+set network.wan.proto='dhcp'
+set network.wan.delegate='0'
+commit network
+EOF
+
+# ========== root 密码：默认 password（首次登录请务必修改） ==========
+# 注意：OpenWrt 默认 root 无密码但禁止 SSH 密码登录，
+#       此处显式设置密码，避免 LuCI 登录卡住
+echo "root:password" | chpasswd 2>/dev/null || true
+
+# ========== 主题默认 istore + 语言 zh_cn ==========
+uci -q set luci.main.lang='zh_cn' 2>/dev/null || true
+uci -q commit luci 2>/dev/null || true
+
+exit 0
