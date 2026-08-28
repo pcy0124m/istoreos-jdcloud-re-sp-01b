@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..3a9dd75
 --- /dev/null
 +++ b/target/linux/ramips/dts/mt7621_jdcloud_re-sp-01b.dts
-@@ -0,0 +1,179 @@
+@@ -0,0 +1,190 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +#include "mt7621.dtsi"
