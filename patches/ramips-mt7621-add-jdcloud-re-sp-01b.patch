@@ -184,17 +184,15 @@ index 0000000..3a9dd75
 +	};
 +};
 diff --git a/target/linux/ramips/image/mt7621.mk b/target/linux/ramips/image/mt7621.mk
-index 4184977..145f8b4 100644
+index 4184977..7c3f2a1 100644
 --- a/target/linux/ramips/image/mt7621.mk
 +++ b/target/linux/ramips/image/mt7621.mk
-@@ -1885,6 +1885,16 @@ define Device/jdcloud_re-cp-02
+@@ -1885,6 +1885,14 @@ define Device/jdcloud_re-cp-02
  endef
  TARGET_DEVICES += jdcloud_re-cp-02
  
 +define Device/jdcloud_re-sp-01b
 +  $(Device/dsa-migration)
-+  # Breed 公版 (0x50000) 布局 firmware 分区可用 0xF70000 = 15925248 B
-+  # 按 256KiB erase block 向下对齐：15680k (16056320 B)
 +  IMAGE_SIZE := 15680k
 +  BLOCKSIZE := 256k
 +  PAGESIZE := 4096
