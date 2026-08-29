@@ -187,7 +187,7 @@ diff --git a/target/linux/ramips/image/mt7621.mk b/target/linux/ramips/image/mt7
 index 4184977..7c3f2a1 100644
 --- a/target/linux/ramips/image/mt7621.mk
 +++ b/target/linux/ramips/image/mt7621.mk
-@@ -1885,6 +1885,14 @@ define Device/jdcloud_re-cp-02
+@@ -1885,6 +1885,19 @@ define Device/jdcloud_re-cp-02
  endef
  TARGET_DEVICES += jdcloud_re-cp-02
  
