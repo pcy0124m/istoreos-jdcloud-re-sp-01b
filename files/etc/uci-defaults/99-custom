@@ -1,51 +1,87 @@
 #!/bin/sh
 # ============================================================
-# uci-defaults/99-custom：首次开机执行（执行完自动删除）
+# uci-defaults/99-custom：首次开机执行（执行完自动标记完成）
 # 目的：强制网络/密码/DHCP，避免出现"灯闪但无IP"的假死
-# 注意：u-boot-env/overlay 第一次启动时会执行 /etc/uci-defaults/*
-#       执行后文件会被移动到 /etc/uci-defaults/.*-done，不会重复执行
+# 注意：不要在开头加 set -e，否则任意一条 uci 失败会导致后面全部跳过
 # ============================================================
-set -e
 
-# ========== LAN：强制 192.168.1.1 + DHCP 服务器开 ==========
-uci -q batch <<'EOF'
-delete network.lan
-set network.lan=interface
-set network.lan.device='br-lan'
-set network.lan.proto='static'
-set network.lan.ipaddr='192.168.1.1'
-set network.lan.netmask='255.255.255.0'
-set network.lan.delegate='0'
-commit network
+# ========== 兜底：直接写 /etc/config/network 最小可用配置 ==========
+# （如果上层 uci 脚本因 br-lan 未创建失败，至少这套兜底能通）
+if [ ! -s /etc/config/network ] || ! uci -q get network.lan.ipaddr >/dev/null 2>&1; then
+  mkdir -p /etc/config
+  cat > /etc/config/network << 'NET_EOF'
 
-delete dhcp.lan
-set dhcp.lan=dhcp
-set dhcp.lan.interface='lan'
-set dhcp.lan.start='100'
-set dhcp.lan.limit='100'
-set dhcp.lan.leasetime='12h'
-set dhcp.lan.dhcpv4='server'
-set dhcp.lan.force='1'
-commit dhcp
-EOF
+config interface 'loopback'
+        option device 'lo'
+        option proto 'static'
+        option ipaddr '127.0.0.1'
+        option netmask '255.0.0.0'
 
-# ========== WAN：默认 DHCP 客户端 ==========
-uci -q batch <<'EOF'
-delete network.wan
-set network.wan=interface
-set network.wan.device='wan'
-set network.wan.proto='dhcp'
-set network.wan.delegate='0'
-commit network
-EOF
+config globals 'globals'
+        option ula_prefix 'fddd::/48'
 
-# ========== root 密码：默认 password（首次登录请务必修改） ==========
-# 注意：OpenWrt 默认 root 无密码但禁止 SSH 密码登录，
-#       此处显式设置密码，避免 LuCI 登录卡住
+config device
+        option name 'br-lan'
+        option type 'bridge'
+        list ports 'lan1'
+        list ports 'lan2'
+
+config interface 'lan'
+        option device 'br-lan'
+        option proto 'static'
+        option ipaddr '192.168.1.1'
+        option netmask '255.255.255.0'
+        option delegate '0'
+
+config device
+        option name 'wan'
+        option macaddr '00:11:22:33:44:55'
+
+config interface 'wan'
+        option device 'wan'
+        option proto 'dhcp'
+
+config interface 'wan6'
+        option device 'wan'
+        option proto 'dhcpv6'
+
+NET_EOF
+  echo "[99-custom] 写入基础 network 配置 (192.168.1.1/24，LAN=lan1+lan2)"
+fi
+
+# ========== uci 修正：确保桥成员、DHCP、密码、语言 ==========
+# 桥成员（DSA 架构里首次开机不绑定 br-lan.ports 的话，bridge 是空的，端口 link 全 down）
+uci -q delete network.@device[0] 2>/dev/null || true
+uci set network.brlan='device' 2>/dev/null
+uci set network.brlan.name='br-lan' 2>/dev/null
+uci set network.brlan.type='bridge' 2>/dev/null
+uci add_list network.brlan.ports='lan1' 2>/dev/null
+uci add_list network.brlan.ports='lan2' 2>/dev/null
+
+uci set network.lan='interface' 2>/dev/null
+uci set network.lan.device='br-lan' 2>/dev/null
+uci set network.lan.proto='static' 2>/dev/null
+uci set network.lan.ipaddr='192.168.1.1' 2>/dev/null
+uci set network.lan.netmask='255.255.255.0' 2>/dev/null
+uci set network.lan.delegate='0' 2>/dev/null
+uci commit network 2>/dev/null || true
+
+# DHCP 服务器开（lan 段 100-200，租期 12h，强制响应）
+uci set dhcp.lan='dhcp' 2>/dev/null
+uci set dhcp.lan.interface='lan' 2>/dev/null
+uci set dhcp.lan.start='100' 2>/dev/null
+uci set dhcp.lan.limit='100' 2>/dev/null
+uci set dhcp.lan.leasetime='12h' 2>/dev/null
+uci set dhcp.lan.dhcpv4='server' 2>/dev/null
+uci set dhcp.lan.force='1' 2>/dev/null
+uci commit dhcp 2>/dev/null || true
+
+# root 密码 password（首次登录请务必修改）
 echo "root:password" | chpasswd 2>/dev/null || true
 
-# ========== 主题默认 istore + 语言 zh_cn ==========
+# 主题默认 istore + 语言 zh_cn
 uci -q set luci.main.lang='zh_cn' 2>/dev/null || true
 uci -q commit luci 2>/dev/null || true
 
+echo "[99-custom] 自定义配置完成"
 exit 0

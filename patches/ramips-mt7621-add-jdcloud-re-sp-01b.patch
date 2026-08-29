@@ -193,9 +193,14 @@ index 4184977..145f8b4 100644
  
 +define Device/jdcloud_re-sp-01b
 +  $(Device/dsa-migration)
-+  IMAGE_SIZE := 27328k
++  # Breed 公版 (0x50000) 布局 firmware 分区可用 0xF70000 = 15925248 B
++  # 按 256KiB erase block 向下对齐：15680k (16056320 B)
++  IMAGE_SIZE := 15680k
++  BLOCKSIZE := 256k
++  PAGESIZE := 4096
 +  DEVICE_VENDOR := JDCloud
 +  DEVICE_MODEL := RE-SP-01B
++  SUPPORTED_DEVICES += jdcloud,re-sp-01b re-sp-01b
 +  DEVICE_PACKAGES := kmod-mt7603 kmod-mt7615-firmware \
 +	kmod-mmc-mtk kmod-usb3
 +endef
