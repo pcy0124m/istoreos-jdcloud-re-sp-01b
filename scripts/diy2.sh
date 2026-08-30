@@ -101,7 +101,7 @@ board=$(expr "$(cat /proc/sys/kernel/os_release)" : "[^_]*_([^_]*)" : '\1')
 
 if [ "$board" = "mediatek_filogic" ] || grep -q "jdcloud,re-sp-01b\|re-sp-01b" /proc/device-tree/compatible 2>/dev/null; then
   # 确保 network 配置存在
-  uci set network.lan.ipaddr='192.168.2.1'
+  uci set network.lan.ipaddr='192.168.1.1'
   uci set network.lan.netmask='255.255.255.0'
   uci set network.lan.type='bridge'
   # LAN 口桥接成员兜底
