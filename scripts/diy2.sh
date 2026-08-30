@@ -114,11 +114,30 @@ if [ "$board" = "mediatek_filogic" ] || grep -q "jdcloud,re-sp-01b\|re-sp-01b" /
   uci set network.lan.dhcp.leasetime='12h'
   uci commit network
 
-  # 防火墙：lan 区域
+  # 防火墙：lan 区域 + 放行 HTTP/HTTPS
   uci set firewall.lan.network='lan'
+  uci set firewall.lan.input='ACCEPT'
+  uci set firewall.lan.output='ACCEPT'
+  uci set firewall.lan.forward='ACCEPT'
+  # 放行 LAN 到路由器的 HTTP/HTTPS
+  uci add_list firewall.@zone[0].rule_list='Allow-HTTP-LAN'
+  uci set firewall.Allow_Lan_Http=rule
+  uci set firewall.Allow_Lan_Http.name='Allow-HTTP-LAN'
+  uci set firewall.Allow_Lan_Http.src='lan'
+  uci set firewall.Allow_Lan_Http.proto='tcp'
+  uci set firewall.Allow_Lan_Http.dest_port='80 443'
+  uci set firewall.Allow_Lan_Http.target='ACCEPT'
   uci commit firewall
 
-  echo "RE-SP-01B: LAN IP 已设为 192.168.2.1，DHCP 已启用"
+  # uhttpd 兜底：确保监听 80 和 443
+  uci set uhttpd.main.listen_http='0.0.0.0:80 [::]:80'
+  uci set uhttpd.main.listen_https='0.0.0.0:443 [::]:443'
+  uci set uhttpd.main.redirect_https='0'
+  uci commit uhttpd
+  /etc/init.d/uhttpd enable 2>/dev/null
+  /etc/init.d/uhttpd start 2>/dev/null
+
+  echo "RE-SP-01B: LAN 初始化完成 (IP+DHCP+Firewall+uhttpd)"
 fi
 
 # 自删除
