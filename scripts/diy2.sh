@@ -4,7 +4,7 @@
 # 作用：修改软件包定义、合并自定义文件、调整内核模块等
 # 工作目录：iStoreOS 源码根目录（$OPENWRTROOT）
 # ============================================================
-set -e
+# 注意：不用 set -e，避免中途某个命令失败导致整个脚本静默退出
 
 # ------------------------------------------------------------
 # 关键修复：物理删除 iStoreOS 中已知有问题的包
@@ -87,3 +87,43 @@ CUSTOM_EOF
 fi
 
 echo "================== DIY2 完成 =================="
+
+# ------------------------------------------------------------
+# RE-SP-01B 首次开机网络初始化（LAN IP + DHCP + 防火墙）
+# ------------------------------------------------------------
+echo "================== 写入 RE-SP-01B 网络初始化脚本 =================="
+mkdir -p package/base-files/files/etc/uci-defaults
+
+cat > package/base-files/files/etc/uci-defaults/91-net-re-sp-01b << 'RESP01B_EOF'
+#!/bin/sh
+# RE-SP-01B 首次开机：设置 LAN 口 IP、DHCP、桥接和防火墙
+board=$(expr "$(cat /proc/sys/kernel/os_release)" : "[^_]*_([^_]*)" : '\1')
+
+if [ "$board" = "mediatek_filogic" ] || grep -q "jdcloud,re-sp-01b\|re-sp-01b" /proc/device-tree/compatible 2>/dev/null; then
+  # 确保 network 配置存在
+  uci set network.lan.ipaddr='192.168.2.1'
+  uci set network.lan.netmask='255.255.255.0'
+  uci set network.lan.type='bridge'
+  # LAN 口桥接成员兜底
+  uci add_list network.lan.ifname='eth0'
+  uci add_list network.lan.ifname='lan1'
+  uci add_list network.lan.ifname='lan2'
+  # DHCP 服务
+  uci set network.lan.dhcp.limit='150'
+  uci set network.lan.dhcp.start='100'
+  uci set network.lan.dhcp.leasetime='12h'
+  uci commit network
+
+  # 防火墙：lan 区域
+  uci set firewall.lan.network='lan'
+  uci commit firewall
+
+  echo "RE-SP-01B: LAN IP 已设为 192.168.2.1，DHCP 已启用"
+fi
+
+# 自删除
+rm -f /etc/uci-defaults/91-net-re-sp-01b
+RESP01B_EOF
+
+chmod +x package/base-files/files/etc/uci-defaults/91-net-re-sp-01b
+echo "RE-SP-01B 网络初始化脚本已写入"
