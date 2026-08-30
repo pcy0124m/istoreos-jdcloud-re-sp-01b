@@ -130,6 +130,12 @@ index 0000000..3a9dd75
 +	};
 +};
 +
++&gmac0 {
++	status = "okay";
++	label = "lan";
++	phy-mode = "rgmii";
++};
++
 +&gmac1 {
 +	status = "okay";
 +	label = "wan";
@@ -142,11 +148,14 @@ index 0000000..3a9dd75
 +
 +&switch0 {
 +	ports {
++		port@0 {
++			status = "okay";
++			label = "cpu";
++		};
 +		port@1 {
 +			status = "okay";
 +			label = "lan1";
 +		};
-+
 +		port@2 {
 +			status = "okay";
 +			label = "lan2";

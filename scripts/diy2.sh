@@ -104,7 +104,7 @@ if [ "$board" = "mediatek_filogic" ] || grep -q "jdcloud,re-sp-01b\|re-sp-01b" /
   uci set network.lan.ipaddr='192.168.1.1'
   uci set network.lan.netmask='255.255.255.0'
   uci set network.lan.type='bridge'
-  # LAN 口桥接成员兜底
+  # LAN 口桥接成员：eth0 是 CPU 口（连接交换机）
   uci add_list network.lan.ifname='eth0'
   uci add_list network.lan.ifname='lan1'
   uci add_list network.lan.ifname='lan2'
@@ -119,14 +119,6 @@ if [ "$board" = "mediatek_filogic" ] || grep -q "jdcloud,re-sp-01b\|re-sp-01b" /
   uci set firewall.lan.input='ACCEPT'
   uci set firewall.lan.output='ACCEPT'
   uci set firewall.lan.forward='ACCEPT'
-  # 放行 LAN 到路由器的 HTTP/HTTPS
-  uci add_list firewall.@zone[0].rule_list='Allow-HTTP-LAN'
-  uci set firewall.Allow_Lan_Http=rule
-  uci set firewall.Allow_Lan_Http.name='Allow-HTTP-LAN'
-  uci set firewall.Allow_Lan_Http.src='lan'
-  uci set firewall.Allow_Lan_Http.proto='tcp'
-  uci set firewall.Allow_Lan_Http.dest_port='80 443'
-  uci set firewall.Allow_Lan_Http.target='ACCEPT'
   uci commit firewall
 
   # uhttpd 兜底：确保监听 80 和 443
