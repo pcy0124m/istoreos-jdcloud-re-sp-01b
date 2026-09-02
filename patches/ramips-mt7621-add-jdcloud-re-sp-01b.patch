@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..3a9dd75
 --- /dev/null
 +++ b/target/linux/ramips/dts/mt7621_jdcloud_re-sp-01b.dts
-@@ -0,0 +1,179 @@
+@@ -0,0 +1,169 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +#include "mt7621.dtsi"
@@ -183,10 +183,10 @@ index 0000000..3a9dd75
 +	};
 +};
 diff --git a/target/linux/ramips/image/mt7621.mk b/target/linux/ramips/image/mt7621.mk
-index 4184977..7c3f2a1 100644
+index 4184977..145f8b4 100644
 --- a/target/linux/ramips/image/mt7621.mk
 +++ b/target/linux/ramips/image/mt7621.mk
-@@ -1885,6 +1885,19 @@ define Device/jdcloud_re-cp-02
+@@ -1885,6 +1885,16 @@ define Device/jdcloud_re-cp-02
  endef
  TARGET_DEVICES += jdcloud_re-cp-02
  
