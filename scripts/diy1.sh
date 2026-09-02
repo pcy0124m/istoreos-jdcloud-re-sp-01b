@@ -49,8 +49,14 @@ if [ -d "$PATCH_DIR" ]; then
         ;;
     esac
     echo "应用补丁: $(basename "$p")"
-    git apply --check "$p"
-    git apply "$p"
+    # 使用 patch 命令，对格式更宽容
+    patch -p1 --forward --fuzz=3 < "$p" || {
+      echo "补丁应用失败，尝试 git apply..."
+      git apply "$p" || {
+        echo "错误: 补丁 $(basename "$p") 应用失败"
+        exit 1
+      }
+    }
     echo "已应用: $(basename "$p")"
   done
 else
