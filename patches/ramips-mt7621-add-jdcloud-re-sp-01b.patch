@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..3a9dd75
 --- /dev/null
 +++ b/target/linux/ramips/dts/mt7621_jdcloud_re-sp-01b.dts
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,179 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +#include "mt7621.dtsi"
@@ -130,12 +130,6 @@ index 0000000..3a9dd75
 +	};
 +};
 +
-+&gmac0 {
-+	status = "okay";
-+	label = "lan";
-+	phy-mode = "rgmii";
-+};
-+
 +&gmac1 {
 +	status = "okay";
 +	label = "wan";
@@ -148,14 +142,11 @@ index 0000000..3a9dd75
 +
 +&switch0 {
 +	ports {
-+		port@0 {
-+			status = "okay";
-+			label = "cpu";
-+		};
 +		port@1 {
 +			status = "okay";
 +			label = "lan1";
 +		};
++
 +		port@2 {
 +			status = "okay";
 +			label = "lan2";
@@ -176,6 +167,16 @@ index 0000000..3a9dd75
 +	};
 +};
 +
++&pcie1 {
++	wifi@0,0 {
++		compatible = "mediatek,mt76";
++		reg = <0x0000 0 0 0 0>;
++		nvmem-cells = <&eeprom_factory_8000>;
++		nvmem-cell-names = "eeprom";
++		ieee80211-freq-limit = <5000000 6000000>;
++	};
++};
++
 +&state_default {
 +	gpio {
 +		groups = "uart2", "uart3", "wdt";
@@ -192,6 +193,8 @@ index 4184977..145f8b4 100644
  
 +define Device/jdcloud_re-sp-01b
 +  $(Device/dsa-migration)
++  # Breed 公版 (0x50000) 布局 firmware 分区可用 0xF70000 = 15925248 B
++  # 按 256KiB erase block 向下对齐：15680k (16056320 B)
 +  IMAGE_SIZE := 15680k
 +  BLOCKSIZE := 256k
 +  PAGESIZE := 4096
@@ -202,7 +205,7 @@ index 4184977..145f8b4 100644
 +	kmod-mmc-mtk kmod-usb3
 +endef
 +TARGET_DEVICES += jdcloud_re-sp-01b
-+
+
  define Device/keenetic_kn-3010
    $(Device/dsa-migration)
    $(Device/uimage-lzma-loader)
