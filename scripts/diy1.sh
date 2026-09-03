@@ -6,269 +6,54 @@
 # ============================================================
 set -e
 
-echo "================== 添加 RE-SP-01B 设备支持 =================="
+# ------------------------------------------------------------
+# 示例 1：添加额外的 feeds 源（取消注释即可启用）
+# ------------------------------------------------------------
+
+# 添加 iStore 应用商店扩展源
+# echo "src-git istore https://github.com/linkease/istore;main" >> feeds.conf.default
+
+# 添加 OpenWrt 官方额外源（luci、packages、routing 等）
+# echo "src-git luci https://github.com/openwrt/luci.git;master" >> feeds.conf.default
+# echo "src-git packages https://github.com/openwrt/packages.git;master" >> feeds.conf.default
 
 # ------------------------------------------------------------
-# 1. 创建 DTS 文件
+# 示例 2：替换默认 hostname、版本号等（按需）
 # ------------------------------------------------------------
-echo "创建 DTS 文件..."
-cat > target/linux/ramips/dts/mt7621_jdcloud_re-sp-01b.dts <<'DTS_EOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
-#include "mt7621.dtsi"
+# 修改默认主机名
+# sed -i 's/OpenWrt/iStoreOS/' package/base-files/files/bin/config_generate
 
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
-#include <dt-bindings/leds/common.h>
-
-/ {
-	compatible = "jdcloud,re-sp-01b", "mediatek,mt7621-soc";
-	model = "JDCloud RE-SP-01B";
-
-	aliases {
-		led-boot = &led_status_red;
-		led-failsafe = &led_status_red;
-		led-running = &led_status_green;
-		led-upgrade = &led_status_blue;
-	};
-
-	chosen {
-		bootargs = "console=ttyS0,115200";
-	};
-
-	keys {
-		compatible = "gpio-keys";
-
-		reset {
-			label = "reset";
-			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_RESTART>;
-		};
-	};
-
-	leds {
-		compatible = "gpio-leds";
-
-		led_status_red: led-red {
-			function = LED_FUNCTION_STATUS;
-			color = <LED_COLOR_ID_RED>;
-			gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
-		};
-
-		led_status_green: led-green {
-			function = LED_FUNCTION_STATUS;
-			color = <LED_COLOR_ID_GREEN>;
-			gpios = <&gpio 8 GPIO_ACTIVE_LOW>;
-		};
-
-		led_status_blue: led-blue {
-			function = LED_FUNCTION_STATUS;
-			color = <LED_COLOR_ID_BLUE>;
-			gpios = <&gpio 12 GPIO_ACTIVE_LOW>;
-		};
-	};
-};
-
-&sdhci {
-	status = "okay";
-};
-
-&spi0 {
-	status = "okay";
-
-	flash@0 {
-		compatible = "jedec,spi-nor";
-		reg = <0>;
-		spi-max-frequency = <50000000>;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			partition@0 {
-				label = "u-boot";
-				reg = <0x0 0x30000>;
-				read-only;
-			};
-
-			partition@30000 {
-				label = "config";
-				reg = <0x30000 0x10000>;
-				read-only;
-			};
-
-			partition@40000 {
-				label = "factory";
-				reg = <0x40000 0x10000>;
-				read-only;
-
-				nvmem-layout {
-					compatible = "fixed-layout";
-					#address-cells = <1>;
-					#size-cells = <1>;
-
-					eeprom_factory_0: eeprom@0 {
-						reg = <0x0 0x400>;
-					};
-
-					eeprom_factory_8000: eeprom@8000 {
-						reg = <0x8000 0x4da8>;
-					};
-				};
-			};
-
-			partition@50000 {
-				compatible = "denx,uimage";
-				label = "firmware";
-				reg = <0x50000 0x1ab0000>;
-			};
-
-			partition@1b00000 {
-				label = "mini";
-				reg = <0x1b00000 0x400000>;
-				read-only;
-			};
-
-			partition@1f00000 {
-				label = "oem";
-				reg = <0x1f00000 0x100000>;
-				read-only;
-			};
-		};
-	};
-};
-
-&gmac0 {
-	status = "okay";
-	label = "lan";
-	phy-mode = "rgmii";
-};
-
-&gmac1 {
-	status = "okay";
-	label = "wan";
-	phy-handle = <&ethphy0>;
-};
-
-&ethphy0 {
-	/delete-property/ interrupts;
-};
-
-&switch0 {
-	ports {
-		port@0 {
-			status = "okay";
-			label = "cpu";
-		};
-		port@1 {
-			status = "okay";
-			label = "lan1";
-		};
-		port@2 {
-			status = "okay";
-			label = "lan2";
-		};
-	};
-};
-
-&pcie {
-	status = "okay";
-};
-
-&pcie0 {
-	wifi@0,0 {
-		compatible = "mediatek,mt76";
-		reg = <0x0000 0 0 0 0>;
-		nvmem-cells = <&eeprom_factory_0>;
-		nvmem-cell-names = "eeprom";
-	};
-};
-
-&state_default {
-	gpio {
-		groups = "uart2", "uart3", "wdt";
-		function = "gpio";
-	};
-};
-DTS_EOF
-echo "DTS 文件已创建"
+# 修改版本号显示
+# sed -i "s/DISTRIB_DESCRIPTION='OpenWrt'/DISTRIB_DESCRIPTION='iStoreOS JDCloud'/" package/base-files/files/etc/openwrt_release
 
 # ------------------------------------------------------------
-# 2. 添加设备定义到 mt7621.mk
+# 应用京东云 RE-SP-01B 设备支持补丁
+# iStoreOS-24.10 分支缺少该设备定义（OpenWrt 上游 commit
+# c35f2a23 才加入），此处从上游移植，包含：
+#   - DTS:  target/linux/ramips/dts/mt7621_jdcloud_re-sp-01b.dts
+#   - 固件定义: target/linux/ramips/image/mt7621.mk
+#   - 网络/MAC: base-files board.d/02_network + hotplug.d/10_fix_wifi_mac
+# 必须在 clone 之后、生成 .config 之前应用，种子 config 中的
+# CONFIG_TARGET_..._DEVICE_jdcloud_re-sp-01b 才能匹配到设备定义
 # ------------------------------------------------------------
-echo "添加设备定义到 mt7621.mk..."
-MT7621_MK="target/linux/ramips/image/mt7621.mk"
-
-# 检查是否已添加
-if grep -q "jdcloud_re-sp-01b" "$MT7621_MK"; then
-  echo "设备定义已存在，跳过"
+echo "================== 应用 RE-SP-01B 设备支持补丁 =================="
+PATCH_DIR="$GITHUB_WORKSPACE/patches"
+if [ -d "$PATCH_DIR" ]; then
+  for p in "$PATCH_DIR"/*.patch; do
+    [ -e "$p" ] || continue
+    echo "应用补丁: $(basename "$p")"
+    git apply --check "$p"
+    git apply "$p"
+    echo "已应用: $(basename "$p")"
+  done
 else
-  # 在 TARGET_DEVICES += jdcloud_re-cp-02 之后添加新设备定义
-  sed -i '/^TARGET_DEVICES += jdcloud_re-cp-02$/a\
-\
-define Device/jdcloud_re-sp-01b\
-  $(Device/dsa-migration)\
-  IMAGE_SIZE := 15680k\
-  BLOCKSIZE := 256k\
-  PAGESIZE := 4096\
-  DEVICE_VENDOR := JDCloud\
-  DEVICE_MODEL := RE-SP-01B\
-  SUPPORTED_DEVICES += jdcloud,re-sp-01b re-sp-01b\
-  DEVICE_PACKAGES := kmod-mt7603 kmod-mt7615-firmware kmod-mmc-mtk kmod-usb3\
-endef\
-TARGET_DEVICES += jdcloud_re-sp-01b' "$MT7621_MK"
-  echo "设备定义已添加"
+  echo "未找到补丁目录: $PATCH_DIR，跳过"
 fi
 
-# ------------------------------------------------------------
-# 3. 添加网络配置到 02_network
-# ------------------------------------------------------------
-echo "添加网络配置..."
-NETWORK_FILE="target/linux/ramips/mt7621/base-files/etc/board.d/02_network"
-
-# 添加 interface setup
-if grep -q "jdcloud,re-sp-01b" "$NETWORK_FILE"; then
-  echo "网络配置已存在，跳过"
-else
-  # 在 jcg,q20 之后添加 jdcloud,re-sp-01b
-  sed -i '/jcg,q20\\|/a\\	jdcloud,re-sp-01b|\\' "$NETWORK_FILE"
-  
-  # 添加 MAC 配置
-  sed -i '/keenetic_kn-3010|\\/i\
-	jdcloud,re-sp-01b)\
-		lan_mac=$(mtd_get_mac_ascii config mac)\
-		wan_mac=$lan_mac\
-		label_mac=$lan_mac\
-		;;\' "$NETWORK_FILE"
-  echo "网络配置已添加"
-fi
-
-# ------------------------------------------------------------
-# 4. 添加 WiFi MAC 修复
-# ------------------------------------------------------------
-echo "添加 WiFi MAC 修复..."
-WIFI_MAC_FILE="target/linux/ramips/mt7621/base-files/etc/hotplug.d/ieee80211/10_fix_wifi_mac"
-
-if grep -q "jdcloud,re-sp-01b" "$WIFI_MAC_FILE"; then
-  echo "WiFi MAC 配置已存在，跳过"
-else
-  # 在 keenetic,kn-3510 之前添加
-  sed -i '/keenetic,kn-3510)/i\
-	jdcloud,re-sp-01b)\
-		hw_mac_addr=$(mtd_get_mac_ascii config mac)\
-		[ "$PHYNBR" = "0" ] && echo $hw_mac_addr > /sys${DEVPATH}/macaddress\
-		[ "$PHYNBR" = "1" ] && macaddr_add $hw_mac_addr 0x800000 > /sys${DEVPATH}/macaddress\
-		;;' "$WIFI_MAC_FILE"
-  echo "WiFi MAC 配置已添加"
-fi
-
-# ------------------------------------------------------------
-# 5. 验证
-# ------------------------------------------------------------
-echo "验证设备支持..."
-grep -q "jdcloud_re-sp-01b" "$MT7621_MK" || {
-  echo "错误：未找到 jdcloud_re-sp-01b 设备定义！"
+# 验证设备定义已就位（失败则中止，避免编出错误设备的固件）
+grep -q "^TARGET_DEVICES += jdcloud_re-sp-01b$" target/linux/ramips/image/mt7621.mk || {
+  echo "错误：补丁应用后未找到 jdcloud_re-sp-01b 设备定义！"
   exit 1
 }
 echo "设备定义验证通过：jdcloud_re-sp-01b 已注册"
