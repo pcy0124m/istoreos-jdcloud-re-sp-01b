@@ -1,3 +1,4 @@
 # 本地补丁验证用中间产物
 patch-build/
 patch-verify/
+istoreos-test/
