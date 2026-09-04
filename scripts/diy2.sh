@@ -54,10 +54,6 @@ ROUTER_PASSWORD_B64="__ROUTER_PASSWORD_B64__"
 
 if [ -n "$ROUTER_IP_RAW" ]; then
   uci set network.lan.ipaddr="$ROUTER_IP_RAW"
-  # 同步 DHCP 地址池
-  base_ip=$(echo "$ROUTER_IP_RAW" | cut -d. -f1-3)
-  uci set network.lan.dhcp.limit=150
-  uci set network.lan.dhcp.start=100
   uci commit network
   echo "已设置 LAN IP: $ROUTER_IP_RAW"
 fi
