@@ -1,0 +1,44 @@
+#!/bin/sh
+# ============================================================
+# uci-defaults/99-network-selfheal：首次开机执行（执行后自删）
+# 功能：强制重新生成全部核心配置（network/system/wireless/dhcp），
+#       彻底覆盖 firmware 分区残留的旧 overlay 配置（Breed 刷机
+#       后常见，导致"绿灯无网络 / WiFi 消失"）。
+# 注意：本文件名在旧固件中不存在，不会被 overlay 旧脚本遮蔽。
+#       执行顺序在 99-custom 之后（z 排序），保证最终配置正确。
+# ============================================================
+
+# ---------- 1. 强制重建核心配置 ----------
+rm -f /etc/config/network /etc/config/system /etc/config/wireless /etc/config/dhcp
+/bin/config_generate 2>/dev/null
+
+# ---------- 2. LAN 接口 IP（192.168.12.1）----------
+if uci -q get network.lan.device >/dev/null 2>&1; then
+  uci set network.lan.ipaddr='192.168.12.1'
+  uci set network.lan.netmask='255.255.255.0'
+else
+  uci set network.lan='interface'
+  uci set network.lan.device='br-lan'
+  uci set network.lan.proto='static'
+  uci set network.lan.ipaddr='192.168.12.1'
+  uci set network.lan.netmask='255.255.255.0'
+  uci set network.lan.delegate='0'
+fi
+uci commit network 2>/dev/null
+
+# ---------- 3. DHCP（lan 段 100-199，租期 12h）----------
+uci -q set dhcp.lan='dhcp'
+uci -q set dhcp.lan.interface='lan'
+uci -q set dhcp.lan.start='100'
+uci -q set dhcp.lan.limit='100'
+uci -q set dhcp.lan.leasetime='12h'
+uci -q set dhcp.lan.dhcpv4='server'
+uci -q set dhcp.lan.force='1'
+uci -q commit dhcp 2>/dev/null
+
+# ---------- 4. 界面语言 ----------
+uci -q set luci.main.lang='zh_cn'
+uci -q commit luci 2>/dev/null
+
+echo "[99-network-selfheal] 核心配置已强制重建（LAN IP=192.168.12.1，root 无密码）"
+exit 0
