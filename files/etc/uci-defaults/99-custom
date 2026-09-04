@@ -1,16 +1,36 @@
 #!/bin/sh
 # ============================================================
 # uci-defaults/99-custom：首次开机执行（执行完自动标记完成）
-# 目的：只做最小修正（LAN IP / DHCP / 界面语言）。
-# 注意：不要重建网络拓扑（桥、device 段），board.d 生成的
-#       默认网络配置已被验证可用（initramfs 下有网络），
-#       重建逻辑会把配置弄坏导致刷机后无网络。
+# 功能：
+#   1) 网络自愈：若 lan 接口/br-lan 桥缺失或损坏（典型场景：
+#      Breed 刷机后 firmware 分区残留旧 overlay 配置导致
+#      config_generate 跳过生成、沿用坏配置），强制删除并
+#      重新生成网络配置，避免"绿灯无网络"。
+#   2) 最小配置：LAN IP=192.168.12.1 / DHCP / 界面语言。
 # ============================================================
 
-# ---------- 1. LAN 接口 IP ----------
-# 若 board.d 已生成 lan 接口，直接覆盖 IP/掩码；
-# 若不存在则补建（不碰 device 拓扑，假设 br-lan 已存在）
-if uci -q get network.lan >/dev/null 2>&1; then
+# ---------- 1. 网络自愈 ----------
+# 判断标准：lan 接口存在、且 device 为 br-lan、且 br-lan 桥存在
+LAN_DEVICE=""
+if uci -q get network.lan.device >/dev/null 2>&1; then
+  LAN_DEVICE=$(uci -q get network.lan.device 2>/dev/null)
+fi
+
+NEED_REGENERATE=0
+if [ "$LAN_DEVICE" != "br-lan" ]; then
+  NEED_REGENERATE=1
+elif ! uci -q show network.br-lan >/dev/null 2>&1; then
+  NEED_REGENERATE=1
+fi
+
+if [ "$NEED_REGENERATE" = "1" ]; then
+  echo "[99-custom] 检测到网络配置异常（lan device='$LAN_DEVICE'），强制重新生成..."
+  rm -f /etc/config/network /etc/config/system
+  /bin/config_generate
+fi
+
+# ---------- 2. LAN 接口 IP ----------
+if uci -q get network.lan.device >/dev/null 2>&1; then
   uci set network.lan.ipaddr='192.168.12.1'
   uci set network.lan.netmask='255.255.255.0'
 else
@@ -23,7 +43,7 @@ else
 fi
 uci commit network 2>/dev/null || true
 
-# ---------- 2. DHCP（lan 段 100-199，租期 12h）----------
+# ---------- 3. DHCP（lan 段 100-199，租期 12h）----------
 uci -q set dhcp.lan='dhcp' 2>/dev/null || true
 uci -q set dhcp.lan.interface='lan' 2>/dev/null || true
 uci -q set dhcp.lan.start='100' 2>/dev/null || true
@@ -33,9 +53,9 @@ uci -q set dhcp.lan.dhcpv4='server' 2>/dev/null || true
 uci -q set dhcp.lan.force='1' 2>/dev/null || true
 uci -q commit dhcp 2>/dev/null || true
 
-# ---------- 3. 界面语言 ----------
+# ---------- 4. 界面语言 ----------
 uci -q set luci.main.lang='zh_cn' 2>/dev/null || true
 uci -q commit luci 2>/dev/null || true
 
-echo "[99-custom] 最小配置完成（LAN IP=192.168.12.1，root 无密码）"
+echo "[99-custom] 配置完成（LAN IP=192.168.12.1，root 无密码）"
 exit 0
