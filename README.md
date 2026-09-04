@@ -26,7 +26,7 @@
 
 ## 🚀 使用方法
 
-### 1. Fork 本仓库
+### 1. Fork 本仓库###1. 分叉本仓库1. 分叉本仓库1. 分叉本仓库
 
 点击右上角 **Fork**，将仓库复制到自己的账号下。
 
@@ -38,11 +38,11 @@
 
 ### 3. 触发云编译
 
-进入自己仓库的 **Actions** 页 → 选择 **"iStoreOS 云编译 - 京东云 RE-SP-01B"** → **Run workflow**：
+进入自己仓库的 **Actions** 页 → 选择 **"iStoreOS 云编译 - 京东云 RE-SP-01B"** → **Run workflow**：进入自己仓库的**Actions操作**页 → 选择**"iStoreOS 云编译 - 京东云 RE-SP-01B"** → **运行工作流**：页面 → 选择**“iStoreOS 云编译 - 京东云 RE-SP-01B”** →**运行工作流**：
 
 | 参数 | 说明 |
 | --- | --- |
-| `repo_branch` | iStoreOS 源码分支/标签，默认 `istoreos-24.10` |
+| `repo_branch` | iStoreOS 源码分支/标签，默认 `istoreos-24.10` || `repo_branch` |istoreos 源码分支/标签，默认`istoreos-24.10` |
 | `clean_cache` | 是否清理缓存全量编译（`true` / `false`） |
 | `router_ip` | 自定义 LAN IP，如 `192.168.100.1`，留空保持默认 |
 | `router_password` | 自定义 root 密码，留空则保持无密码（日志中自动隐藏） |
@@ -51,8 +51,8 @@
 
 编译完成后（约 1~2 小时）：
 
-- **Artifacts**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天
-- **Release**：手动触发时会自动创建 Release，包含 `*.bin` 固件与 `*.manifest` 校验文件
+- **Artifacts**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天- **构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天- **构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天-**构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天- **构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天-**构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天-**构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天-**构件**：仓库 Actions 页面该次运行的 Artifacts，保留 14 天
+- **Release发布发布发布发布**：手动触发时会自动创建 Release，包含 `*.bin`：手动触发时会自动创建发布，包含`*.bin` 固件与 `*.manifest` 校验文件- **发布**：手动触发时会自动创建 Release，包含`*.bin`：手动触发时会自动创建发布，包含`*.bin`：手动触发时会自动创建发布，包含`*.bin``固件与`*.manifest`校验文件- **发布**：手动触发时会自动创建 Release，包含`*.bin`：手动触发时会自动创建发布，包含`*.bin`：手动触发时会自动创建发布，包含`*.bin`：手动触发时会自动创建发布，包含`*.bin`固件与`*.manifest`校验文件-**发布**：手动触发时会自动创建 Release，包含`*.bin`固件与`*.manifest`校验文件
 
 ## 📁 目录结构
 
@@ -98,13 +98,13 @@ make -j$(nproc) V=s
 编译产物位于 `bin/targets/ramips/mt7621/`。
 
 ## ⚠️ 注意事项
-
+刷机务必先刷initramfs-kernel.bin然后重网页固件升级上传squashfs-sysupgrade.bin不保留配置
 - **设备匹配**：请确认你的设备是京东云 **RE-SP-01B**（无线宝一代），其他型号请勿刷入
 - **备份**：刷机前务必用 Breed / 官方工具备份原厂固件、eeprom 与配置分区
 - **首次启动**：默认 LAN IP `192.168.12.1`，如与光猫冲突请先断开光猫或使用自定义 IP
 - **固件体积**：精简版固件约 22MB，适配原厂 32MB Flash 分区布局
 
-## 📜 License
+## 📜 License##许可证
 
 本仓库仅包含编译配置与脚本，遵循上游 OpenWrt / iStoreOS 开源协议（GPL-2.0 等）。
 固件产物版权归 iStoreOS 社区及上游作者所有。
