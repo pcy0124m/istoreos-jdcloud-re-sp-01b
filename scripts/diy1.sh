@@ -28,6 +28,22 @@ set -e
 # sed -i "s/DISTRIB_DESCRIPTION='OpenWrt'/DISTRIB_DESCRIPTION='iStoreOS JDCloud'/" package/base-files/files/etc/openwrt_release
 
 # ------------------------------------------------------------
+# 集成 OpenAppFilter（OAF 应用过滤）
+# 固定 v6.1.8 稳定版（官方支持 OpenWrt 24.10 / kernel 6.6）
+# 注意：自编译固件无法用 opkg 安装官方 OAF（内核 magic 不匹配），
+#       必须随固件源码一起编译。
+# ------------------------------------------------------------
+echo "================== 集成 OpenAppFilter (v6.1.8) =================="
+if [ ! -d package/OpenAppFilter ]; then
+  git clone --depth 1 --branch v6.1.8 https://github.com/destan19/OpenAppFilter.git package/OpenAppFilter
+fi
+[ -d package/OpenAppFilter/oaf ] && [ -d package/OpenAppFilter/open-app-filter ] && [ -d package/OpenAppFilter/luci-app-oaf ] || {
+  echo "错误：OpenAppFilter 克隆不完整！"
+  exit 1
+}
+echo "OpenAppFilter 已就位：$(ls -d package/OpenAppFilter/*/)"
+
+# ------------------------------------------------------------
 # 应用京东云 RE-SP-01B 设备支持补丁
 # iStoreOS-24.10 分支缺少该设备定义（OpenWrt 上游 commit
 # c35f2a23 才加入），此处从上游移植，包含：
