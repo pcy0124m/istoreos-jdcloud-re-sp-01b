@@ -21,7 +21,7 @@ on:
         type: choice
         options: ['false', 'true']
       router_ip:
-        description: '路由器 LAN IP（如 192.168.100.1；留空则保持默认 192.168.1.1）'
+        description: '路由器 LAN IP（如 192.168.100.1；留空则保持默认 192.168.12.1）'
         required: false
         default: ''
         type: string

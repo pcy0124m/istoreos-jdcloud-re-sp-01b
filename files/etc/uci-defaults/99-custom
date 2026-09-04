@@ -29,7 +29,7 @@ config device
 config interface 'lan'
         option device 'br-lan'
         option proto 'static'
-        option ipaddr '192.168.1.1'
+        option ipaddr '192.168.12.1'
         option netmask '255.255.255.0'
         option delegate '0'
 
@@ -46,7 +46,7 @@ config interface 'wan6'
         option proto 'dhcpv6'
 
 NET_EOF
-  echo "[99-custom] 写入基础 network 配置 (192.168.1.1/24，LAN=lan1+lan2)"
+  echo "[99-custom] 写入基础 network 配置 (192.168.12.1/24，LAN=lan1+lan2)"
 fi
 
 # ========== uci 修正：确保桥成员、DHCP、密码、语言 ==========
@@ -61,7 +61,7 @@ uci add_list network.brlan.ports='lan2' 2>/dev/null
 uci set network.lan='interface' 2>/dev/null
 uci set network.lan.device='br-lan' 2>/dev/null
 uci set network.lan.proto='static' 2>/dev/null
-uci set network.lan.ipaddr='192.168.1.1' 2>/dev/null
+uci set network.lan.ipaddr='192.168.12.1' 2>/dev/null
 uci set network.lan.netmask='255.255.255.0' 2>/dev/null
 uci set network.lan.delegate='0' 2>/dev/null
 uci commit network 2>/dev/null || true
@@ -75,9 +75,7 @@ uci set dhcp.lan.leasetime='12h' 2>/dev/null
 uci set dhcp.lan.dhcpv4='server' 2>/dev/null
 uci set dhcp.lan.force='1' 2>/dev/null
 uci commit dhcp 2>/dev/null || true
-
-# root 密码 password（首次登录请务必修改）
-echo "root:password" | chpasswd 2>/dev/null || true
+# root 密码保持为空（无密码登录，首次使用请自行设置）
 
 # 主题默认 istore + 语言 zh_cn
 uci -q set luci.main.lang='zh_cn' 2>/dev/null || true
